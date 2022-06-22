@@ -6,6 +6,18 @@ import asyncio
 import random
 import copy
 
+HEIGHT = 15
+WIDTH = 8
+CENTER = WIDTH // 2
+
+TETROMINO_SHAPES = [
+    [[CENTER - 1, 0], [CENTER, 0], [CENTER + 1, 0], [CENTER, 1], [CENTER, 0]],  # T-shape
+    [[CENTER - 2, 0], [CENTER - 1, 0], [CENTER, 0], [CENTER + 1, 0], [CENTER, 0]],  # I-shape
+    [[CENTER - 1, 0], [CENTER, 0], [CENTER + 1, 0], [CENTER + 1, 1], [CENTER, 0]],  # J-Shape
+    [[CENTER - 1, 0], [CENTER, 0], [CENTER + 1, 0], [CENTER - 1, 1], [CENTER, 0]],  # L-Shape
+    [[CENTER - 1, 0], [CENTER, 0], [CENTER - 1, 1], [CENTER, 1], [CENTER - 0.5, 0.5]],  # O-Shape
+]
+
 
 @dataclass
 class Colors:
@@ -19,24 +31,10 @@ class Statistics:
     blocks = 0
     score = 0
     lines_cleared = 0
-    
-
-HEIGHT = 15
-WIDTH = 8
-CENTER = WIDTH // 2
 
 
 client = Bot(".")
 color = Colors()
-
-
-TETROMINO_SHAPES = [
-    [[CENTER - 1, 0], [CENTER, 0], [CENTER + 1, 0], [CENTER, 1], [CENTER, 0]],  # T-shape
-    [[CENTER - 2, 0], [CENTER - 1, 0], [CENTER, 0], [CENTER + 1, 0], [CENTER, 0]],  # I-shape
-    [[CENTER - 1, 0], [CENTER, 0], [CENTER + 1, 0], [CENTER + 1, 1], [CENTER, 0]],  # J-Shape
-    [[CENTER - 1, 0], [CENTER, 0], [CENTER + 1, 0], [CENTER - 1, 1], [CENTER, 0]],  # L-Shape
-    [[CENTER - 1, 0], [CENTER, 0], [CENTER - 1, 1], [CENTER, 1], [CENTER - 0.5, 0.5]],  # O-Shape
-]
 
 
 class Tetromino:
@@ -91,6 +89,7 @@ class Tetris:
         self.direction = 0
         self.rotation = 0
         self.down = False  # whether the block is going to teleport to the bottom
+        self.stats = Statistics()
 
     def block_at_coordinates(self, x, y):
         for tetromino in self.tetrominoes:
@@ -109,8 +108,11 @@ class Tetris:
         return True
 
     def fall_all_tetrominoes(self, fall_last_block):
+        if fall_last_block is True:
+            self.stats.score += 10
+
         for i, tetromino in enumerate(self.tetrominoes):
-            if i == len(self.tetrominoes) - 1 and fall_last_block is None:
+            if i == len(self.tetrominoes) - 1 and fall_last_block is False:
                 continue
 
             if self.valid_move(tetromino, new_coords := tetromino.fall()):
@@ -137,6 +139,8 @@ class Tetris:
             description=self.draw(),
             color=color.discord
         )
+
+        embed.set_footer(text=f"Score: {self.stats.score}")
 
         await self.message.edit(embed=embed)
 
@@ -214,6 +218,8 @@ class Tetris:
                     self.tetrominoes[i].coordinates.pop(j)
 
         for _ in lines_to_clear:
+            self.stats.lines_cleared += 1
+            self.stats.score += 1000
             self.fall_all_tetrominoes(False)
 
     def teleport_down(self):
@@ -241,6 +247,7 @@ class Tetris:
             self.get_reaction()
 
             if spawn_new_block and not self.valid_move(self.tetrominoes[-1], self.tetrominoes[-1].fall()):
+                self.stats.blocks += 1
                 self.tetrominoes.append(Tetromino())
 
                 if self.lose_check(self.tetrominoes[-1]):
@@ -263,8 +270,10 @@ class Tetris:
             await asyncio.sleep(1)
 
         embed = discord.Embed(
-            title="Tetris",
-            description="You lose!",
+            title="You Lose!",
+            description=f"Score: {self.stats.score}\n"
+                        f"Lines cleared: {self.stats.lines_cleared}\n"
+                        f"Blocks spawned: {self.stats.blocks}",
             color=color.red
         )
 
