@@ -15,7 +15,6 @@ TETROMINO_SHAPES = [
     [[CENTER - 2, 0], [CENTER - 1, 0], [CENTER, 0], [CENTER + 1, 0], [CENTER, 0]],  # I-shape
     [[CENTER - 1, 0], [CENTER, 0], [CENTER + 1, 0], [CENTER + 1, 1], [CENTER, 0]],  # J-Shape
     [[CENTER - 1, 0], [CENTER, 0], [CENTER + 1, 0], [CENTER - 1, 1], [CENTER, 0]],  # L-Shape
-    [[CENTER - 1, 0], [CENTER, 0], [CENTER - 1, 1], [CENTER, 1], [CENTER - 0.5, 0.5]],  # O-Shape
 ]
 
 
@@ -26,11 +25,14 @@ class Colors:
     red = 0xff4400
 
 
-@dataclass
 class Statistics:
-    blocks = 0
-    score = 0
-    lines_cleared = 0
+    def __init__(self):
+        self.blocks = 0
+        self.score = 0
+        self.lines_cleared = 0
+
+        with open("highscore.txt", "r") as f:
+            self.highscore = int(f.read())
 
 
 client = Bot(".")
@@ -91,6 +93,9 @@ class Tetris:
         self.down = False  # whether the block is going to teleport to the bottom
         self.stats = Statistics()
 
+        with open("highscore.txt", "r") as f:
+            self.highscore = f.read()
+
     def block_at_coordinates(self, x, y):
         for tetromino in self.tetrominoes:
             for coordinate in tetromino.coordinates:
@@ -140,7 +145,7 @@ class Tetris:
             color=color.discord
         )
 
-        embed.set_footer(text=f"Score: {self.stats.score}")
+        embed.set_footer(text=f"Score: {self.stats.score} | Highscore: {self.stats.highscore}")
 
         await self.message.edit(embed=embed)
 
@@ -272,16 +277,24 @@ class Tetris:
         embed = discord.Embed(
             title="You Lose!",
             description=f"Score: {self.stats.score}\n"
+                        f"Highscore: {self.stats.highscore}\n"
                         f"Lines cleared: {self.stats.lines_cleared}\n"
                         f"Blocks spawned: {self.stats.blocks}",
             color=color.red
         )
 
+        if self.stats.score > self.stats.highscore:
+            self.stats.highscore = self.stats.score
+            embed.set_footer(text=f"New Highscore: {self.stats.highscore}")
+
+            with open("highscore.txt", "w") as f:
+                f.write(str(self.stats.highscore))
+
         await self.message.edit(embed=embed)
 
 
 @client.command()
-async def start(ctx):
+async def tetris(ctx):
     t = Tetris(ctx)
     await t.run_game()
 
