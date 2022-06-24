@@ -45,23 +45,20 @@ class Tetromino:
         self.centerpoint = self.coordinates.pop()
         self.color = random.choice("🟦🟩🟪🟥")
 
-    def fall(self):
-        fallen_coords = copy.deepcopy(self.coordinates)
+    def move_coords(self, x, y):
+        # Returns the horizontal and vertical movement of the block given
 
-        for fallen_coord in fallen_coords:
-            fallen_coord[1] += 1
-
-        return fallen_coords
-
-    def move_horizontal(self, direction):
         new_coords = copy.deepcopy(self.coordinates)
 
         for coordinate in new_coords:
-            coordinate[0] += direction
+            coordinate[0] += x
+            coordinate[1] += y
 
         return new_coords
 
     def rotate(self, rotation):
+        # Uses geometry to rotate the block
+
         # Rotation is either -1 or 1 for counterclockwise and clockwise rotation
         rotated_coords = []
 
@@ -97,12 +94,15 @@ class Tetris:
             self.highscore = f.read()
 
     def block_at_coordinates(self, x, y):
+        # Returns a block at the given coordinates, None if there is no block. Used for checking if a block can be moved
         for tetromino in self.tetrominoes:
             for coordinate in tetromino.coordinates:
                 if coordinate[0] == x and coordinate[1] == y:
                     return tetromino
 
     def valid_move(self, tetromino, new_coords):
+        # Checks if the tetromino can be moved to the new coordinates
+
         for coordinates in new_coords:
             # Check if the tetromino is outside the screen
             if coordinates[0] < 0 or coordinates[0] >= WIDTH or coordinates[1] >= HEIGHT:
@@ -113,6 +113,8 @@ class Tetris:
         return True
 
     def fall_all_tetrominoes(self, fall_last_block):
+        # Falls all the tetrominoes that can be fallen.
+
         if fall_last_block is True:
             self.stats.score += 10
 
@@ -120,11 +122,12 @@ class Tetris:
             if i == len(self.tetrominoes) - 1 and fall_last_block is False:
                 continue
 
-            if self.valid_move(tetromino, new_coords := tetromino.fall()):
+            if self.valid_move(tetromino, new_coords := tetromino.move_coords(0, 1)):
                 self.tetrominoes[i].coordinates = new_coords
                 self.tetrominoes[i].move_center(0, 1)
 
     def draw(self):
+        # Draws the screen in emojis to be displayed in the self.edit_message() function
         screen = ""
 
         for y in range(HEIGHT):
@@ -139,6 +142,7 @@ class Tetris:
         return screen
 
     async def edit_message(self):
+        # Edits the message with the output of the draw function
         embed = discord.Embed(
             title="Tetris",
             description=self.draw(),
@@ -150,6 +154,7 @@ class Tetris:
         await self.message.edit(embed=embed)
 
     def get_reaction(self):
+        # Gets reactions from the user and changes self vars accordingly to be used by other functions
         # Cache the message to get the reactions
         cache_msg = discord.utils.get(client.cached_messages, id=self.message.id)
 
@@ -177,24 +182,29 @@ class Tetris:
         self.down = cache_msg.reactions[6].count > 1
 
     async def add_action(self):
+        # Adds reactions at the start of the game. Required for self.get_reaction()
         emojis = ["⏪", "⬅", "🔄", "🔁", "➡", "⏩", "⬇"]
 
         for emoji in emojis:
             await self.message.add_reaction(emoji)
 
     def move_x(self):
+        # Moves the last tetromino in the tetrominoes list horizontally
+
         self.tetrominoes[-1].move_center(self.direction, 0)
 
         for _ in range(abs(self.direction)):
             if self.valid_move(
                     self.tetrominoes[-1],
-                    new_coords := self.tetrominoes[-1].move_horizontal(self.direction / abs(self.direction))
+                    new_coords := self.tetrominoes[-1].move_coords(self.direction / abs(self.direction), 0)
             ):
                 self.tetrominoes[-1].coordinates = new_coords
 
         self.direction = 0
 
     def rotate_block(self):
+        # Rotates the last block in the tetrominoes list, the one being controlled by the player
+
         if not self.rotation:
             return
 
@@ -204,6 +214,7 @@ class Tetris:
         self.rotation = 0
 
     def detect_full_lines(self):
+        # Returns a list of full lines that need to be removed, needed for self.clear_lines()
         full_lines = []
 
         for y in range(HEIGHT):
@@ -217,6 +228,8 @@ class Tetris:
         return full_lines
 
     def clear_lines(self, lines_to_clear):
+        # Takes in the output from the detect_full_lines function and clears the lines
+
         for i, tetromino in enumerate(self.tetrominoes):
             for j, coordinate in reversed(list(enumerate(tetromino.coordinates))):
                 if coordinate[1] in lines_to_clear:
@@ -228,54 +241,30 @@ class Tetris:
             self.fall_all_tetrominoes(False)
 
     def teleport_down(self):
+        # Teleports the tetromino to the bottom of the screen, called a hard drop in the game
         if not self.down:
             return
 
-        while self.valid_move(self.tetrominoes[-1], new_coords := self.tetrominoes[-1].fall()):
+        while self.valid_move(
+                self.tetrominoes[-1],
+                new_coords := self.tetrominoes[-1].move_coords(0, 1)
+        ):
             self.tetrominoes[-1].coordinates = new_coords
 
     def lose_check(self, tetromino):  # sourcery skip: use-any, use-next
+        # Checks if the player lost
+        # Ignores sourcery refactoring because of readability
+
         for coordinate in tetromino.coordinates:
             if self.block_at_coordinates(*coordinate) != tetromino:
                 return True
 
         return False
 
-    async def run_game(self):
-        self.message = await self.ctx.send("** **")
-        await self.add_action()
-        await asyncio.sleep(1)
-
-        spawn_new_block = False  # Adds a one frame buffer to move left or right
-
-        while True:
-            self.get_reaction()
-
-            if spawn_new_block and not self.valid_move(self.tetrominoes[-1], self.tetrominoes[-1].fall()):
-                self.stats.blocks += 1
-                self.tetrominoes.append(Tetromino())
-
-                if self.lose_check(self.tetrominoes[-1]):
-                    break
-
-                spawn_new_block = False
-                self.direction = 0
-                self.rotation = 0
-
-            if not self.valid_move(self.tetrominoes[-1], self.tetrominoes[-1].fall()):
-                spawn_new_block = True
-
-            self.clear_lines(self.detect_full_lines())
-            self.fall_all_tetrominoes(True)
-            self.teleport_down()
-            self.rotate_block()
-            self.move_x()
-            await self.edit_message()
-
-            await asyncio.sleep(1)
-
+    async def post_lose_message(self):
+        # Edits the message announcing the loss
         embed = discord.Embed(
-            title="You Lose!",
+            title="Game Over!",
             description=f"Score: {self.stats.score}\n"
                         f"Highscore: {self.stats.highscore}\n"
                         f"Lines cleared: {self.stats.lines_cleared}\n"
@@ -283,14 +272,56 @@ class Tetris:
             color=color.red
         )
 
-        if self.stats.score > self.stats.highscore:
-            self.stats.highscore = self.stats.score
-            embed.set_footer(text=f"New Highscore: {self.stats.highscore}")
-
-            with open("highscore.txt", "w") as f:
-                f.write(str(self.stats.highscore))
-
         await self.message.edit(embed=embed)
+
+    async def highscore_check(self):
+        # Checks if the highscore is beaten and sends a message
+        if self.stats.score < self.stats.highscore:
+            return
+
+        embed = discord.Embed(
+            title="New Highscore!",
+            description=f"Score: {self.stats.score}\n"
+                        f"Previous highscore: {self.stats.highscore}\n",
+            color=color.green
+        )
+
+        await self.ctx.send(embed=embed)
+
+    async def run_game(self):
+        self.message = await self.ctx.send("** **")  # Send an empty message to be edited later
+        await self.add_action()  # Add the reactions to the message
+        await asyncio.sleep(1)
+
+        spawn_new_block = False  # Adds a one frame buffer to move left or right
+
+        while True:
+            # Spawn new block
+            if spawn_new_block and not self.valid_move(self.tetrominoes[-1], self.tetrominoes[-1].move_coords(0, 1)):
+                self.stats.blocks += 1
+                self.tetrominoes.append(Tetromino())
+
+                if self.lose_check(self.tetrominoes[-1]):
+                    break
+
+                spawn_new_block = False
+
+            # Schedule a block to be spawned next frame if the block cannot fall
+            if not self.valid_move(self.tetrominoes[-1], self.tetrominoes[-1].move_coords(0, 1)):
+                spawn_new_block = True
+
+            self.get_reaction()
+            self.clear_lines(self.detect_full_lines())
+            self.fall_all_tetrominoes(True)
+            self.teleport_down()
+            self.rotate_block()
+            self.move_x()
+
+            await self.edit_message()
+            await asyncio.sleep(1)
+
+        await self.post_lose_message()
+        await self.highscore_check()
 
 
 @client.command()
