@@ -13,6 +13,8 @@ Git clone this repository using `git clone https://github.com/AlexanderJCS/tetri
 
 Create a new bot and generate a key from the Discord developer portal: https://discord.com/developers/applications. Copy/paste the key into `token.txt`. 
 
+Run `main.py`.
+
 Run the bot and type `.setup` command in the Discord server.
 
 ## How to Play
